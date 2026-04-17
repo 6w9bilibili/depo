@@ -1,265 +1,229 @@
 #!/bin/bash
 
-# depo - sh终端编辑器
-# 作者: 6w9
-#企鹅：3096153202
-# 版本: 1.0
+# ============================================
+# depo - sh 终端编辑器 v1.1
+# ============================================
 
-FILE_PATH=""
 BUFFER=""
-CURSOR_POS=0
-COMMAND_MODE=0
+CURSOR=0
+FILE_PATH=""
 
-# 颜色定义
+# ===== 标记系统 =====
+MARK_MODE=0
+MARKS=()
+
+# ===== 颜色 =====
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# 清屏函数
+# ===== 清屏 =====
 clear_screen() {
     clear
 }
 
-# 显示状态栏
+# ===== 显示状态栏 =====
 show_status() {
     echo -e "${BLUE}=== depo 编辑器 ===${NC}"
-    if [ -n "$FILE_PATH" ]; then
-        echo -e "文件: ${GREEN}$FILE_PATH${NC}"
-    else
-        echo -e "文件: ${YELLOW}[未命名]${NC}"
-    fi
-    echo -e "Ctrl+0:命令终端 | Ctrl+1:保存退出 | Ctrl+2:丢弃退出"
-    echo -e "Ctrl+3:保存 | Ctrl+4:丢弃 | Ctrl+5:退出命令终端"
+    echo -e "文件: ${GREEN}${FILE_PATH:-[未命名]}${NC}"
+    echo -e "Alt+0:命令终端 | Alt+1:保存退出 | Alt+2:丢弃退出"
+    echo -e "Alt+3:保存 | Alt+4:丢弃 | Alt+5:退出命令终端"
+    echo -e "Alt+6:取消标记 | Ctrl+←/→:添加标记 | Ctrl:结束标记"
     echo -e "${BLUE}===================${NC}"
     echo ""
 }
 
-# 显示缓冲区内容
+# ===== 显示缓冲区（带光标 & 标记）=====
 display_buffer() {
-    echo "$BUFFER"
-}
+    local i=0
+    local line=""
 
-# 读取文件
-load_file() {
-    if [ -f "$1" ]; then
-        BUFFER=$(cat "$1")
-        FILE_PATH="$1"
-    else
-        BUFFER=""
-        FILE_PATH="$1"
-    fi
-}
+    while [ $i -lt ${#BUFFER} ]; do
+        local ch="${BUFFER:$i:1}"
 
-# 保存文件
-save_file() {
-    if [ -n "$FILE_PATH" ]; then
-        echo "$BUFFER" > "$FILE_PATH"
-        echo -e "${GREEN}已保存到: $FILE_PATH${NC}"
-        sleep 0.5
-    else
-        echo -e "${RED}错误: 没有指定文件名${NC}"
-        read -p "请输入文件名: " filename
-        if [ -n "$filename" ]; then
-            FILE_PATH="$filename"
-            echo "$BUFFER" > "$FILE_PATH"
-            echo -e "${GREEN}已保存到: $FILE_PATH${NC}"
-            sleep 0.5
-        fi
-    fi
-}
-
-# 十六进制转换
-hex_convert() {
-    local code="$1"
-    if [ "$code" = "100" ]; then
-        if [ -n "$FILE_PATH" ] && [ -f "$FILE_PATH" ]; then
-            local hex_content=$(xxd "$FILE_PATH" | cut -d' ' -f2-)
-            BUFFER="$hex_content"
-            echo -e "${GREEN}文件已转换为16进制格式 (代码:100)${NC}"
-            sleep 0.5
-        else
-            echo -e "${RED}错误: 没有可转换的文件${NC}"
-            sleep 1
-        fi
-    else
-        echo -e "${RED}错误: 未知转换代码 $code${NC}"
-        sleep 1
-    fi
-}
-
-# 重命名文件
-rename_file() {
-    local new_name="$1"
-    if [ -n "$new_name" ]; then
-        if [ -n "$FILE_PATH" ] && [ -f "$FILE_PATH" ]; then
-            mv "$FILE_PATH" "$new_name"
-        fi
-        FILE_PATH="$new_name"
-        echo -e "${GREEN}文件重命名为: $new_name${NC}"
-        sleep 0.5
-    fi
-}
-
-# 插入文件
-insert_file() {
-    local insert_path="$1"
-    if [ -f "$insert_path" ]; then
-        local file_content=$(cat "$insert_path")
-        BUFFER="${BUFFER}${file_content}"
-        
-        # 检查是否为TXT转PDF
-        if [[ "$FILE_PATH" == *.txt ]]; then
-            FILE_PATH="${FILE_PATH%.txt}.pdf"
-            echo -e "${YELLOW}注意: .TXT文件已转换为.PDF格式${NC}"
-        fi
-        echo -e "${GREEN}已插入文件: $insert_path${NC}"
-        sleep 0.5
-    else
-        echo -e "${RED}错误: 文件不存在 - $insert_path${NC}"
-        sleep 1
-    fi
-}
-
-# 执行Python文件
-execute_python() {
-    local py_file="$1"
-    if command -v python3 &> /dev/null || command -v python &> /dev/null; then
-        if [ -f "$py_file" ]; then
-            echo -e "${YELLOW}执行Python文件: $py_file${NC}"
-            echo "-------------------"
-            if command -v python3 &> /dev/null; then
-                python3 "$py_file"
-            else
-                python "$py_file"
+        # 是否标记位置
+        local marked=0
+        for m in "${MARKS[@]}"; do
+            if [ "$m" -eq "$i" ]; then
+                marked=1
+                break
             fi
-            echo "-------------------"
-            read -p "按回车继续..."
-        else
-            echo -e "${RED}错误: Python文件不存在 - $py_file${NC}"
-            sleep 1
+        done
+
+        if [ $marked -eq 1 ]; then
+            ch="~$ch"
         fi
-    else
-        echo -e "${RED}错误: 设备未安装Python${NC}"
-        sleep 1
-    fi
+
+        if [ $i -eq $CURSOR ]; then
+            echo -n "${RED}[${ch}]${NC}"
+        else
+            echo -n "$ch"
+        fi
+
+        ((i++))
+    done
+    echo ""
 }
 
-# 命令终端模式
+# ===== 保存文件 =====
+save_file() {
+    if [ -z "$FILE_PATH" ]; then
+        read -p "请输入文件名: " FILE_PATH
+    fi
+    echo "$BUFFER" > "$FILE_PATH"
+    echo -e "${GREEN}已保存: $FILE_PATH${NC}"
+    sleep 0.5
+}
+
+# ===== 命令终端 =====
 command_terminal() {
     clear_screen
     echo -e "${BLUE}=== depo 命令终端 ===${NC}"
-    echo -e "可用命令:"
-    echo -e "  poit (100)           - 转换为16进制"
-    echo -e "  test (filename)      - 重命名文件"
-    echo -e "  les /path/file       - 插入文件"
-    echo -e "  python (file.py)     - 执行Python文件"
-    echo -e "  exit                 - 退出命令终端"
+    echo "poit (100)        - 转为16进制"
+    echo "test (file.txt)   - 重命名"
+    echo "les /path/file    - 插入文件"
+    echo "python (a.py)     - 执行Python"
+    echo "exit              - 返回"
     echo -e "${BLUE}=====================${NC}"
-    echo ""
-    
+
     while true; do
         echo -n "depo> "
         read -r cmd
-        
         case "$cmd" in
-            "exit")
-                break
-                ;;
-            poit*)
-                local code=$(echo "$cmd" | sed -E 's/.*\(([0-9]+)\).*/\1/')
-                if [ -n "$code" ]; then
-                    hex_convert "$code"
-                fi
-                ;;
-            test*)
-                local filename=$(echo "$cmd" | sed -E 's/.*\((.*)\).*/\1/')
-                rename_file "$filename"
-                ;;
-            les*)
-                local filepath=$(echo "$cmd" | sed -E 's/.*((\/[^\s]+|[^)]+)).*/\1/')
-                insert_file "$filepath"
-                ;;
-            python*)
-                local pyfile=$(echo "$cmd" | sed -E 's/.*\((.*)\).*/\1/')
-                execute_python "$pyfile"
-                ;;
-            *)
-                echo -e "${RED}未知命令: $cmd${NC}"
-                ;;
+            exit) break ;;
+            poit*) hex_convert ;;
+            test*) rename_file "$cmd" ;;
+            les*) insert_file "$cmd" ;;
+            python*) exec_python "$cmd" ;;
         esac
     done
 }
 
-# 主循环
-main_loop() {
-    while true; do
-        clear_screen
-        show_status
-        display_buffer
-        
-        # 读取按键
-        read -rsn1 key
-        
-        # 检查Ctrl组合键
-        if [[ $key == $'\x00' ]]; then
-            read -rsn1 key2
-            
-            case "$key2" in
-                "0")  # Ctrl+0 启动命令终端
-                    command_terminal
-                    ;;
-                "1")  # Ctrl+1 保存并退出
-                    save_file
-                    echo -e "${GREEN}保存并退出...${NC}"
-                    sleep 0.5
-                    exit 0
-                    ;;
-                "2")  # Ctrl+2 丢弃并退出
-                    echo -e "${YELLOW}丢弃更改并退出...${NC}"
-                    sleep 0.5
-                    exit 0
-                    ;;
-                "3")  # Ctrl+3 保存但不退出
-                    save_file
-                    ;;
-                "4")  # Ctrl+4 丢弃但不退出
-                    echo -e "${YELLOW}丢弃更改...${NC}"
-                    if [ -n "$FILE_PATH" ] && [ -f "$FILE_PATH" ]; then
-                        BUFFER=$(cat "$FILE_PATH")
-                    else
-                        BUFFER=""
-                    fi
-                    sleep 0.5
-                    ;;
-                "5")  # Ctrl+5 退出命令终端 (已在主循环中，忽略)
-                    ;;
-            esac
-        elif [[ $key == $'\x1b' ]]; then
-            # ESC序列，忽略
-            read -rsn2
-        else
-            # 普通字符输入
-            if [[ $key == $'\x7f' ]] || [[ $key == $'\x08' ]]; then
-                # Backspace
-                if [ ${#BUFFER} -gt 0 ]; then
-                    BUFFER="${BUFFER%?}"
-                fi
-            else
-                BUFFER="${BUFFER}${key}"
-            fi
-        fi
-    done
+hex_convert() {
+    if [ -n "$FILE_PATH" ]; then
+        BUFFER=$(xxd "$FILE_PATH" | cut -d' ' -f2-)
+        echo -e "${GREEN}已转换为16进制${NC}"
+    fi
 }
 
-# 程序入口
-if [ $# -eq 1 ]; then
-    load_file "$1"
-fi
+rename_file() {
+    local name=$(echo "$1" | sed -E 's/.*\((.*)\).*/\1/')
+    FILE_PATH="$name"
+    echo -e "${GREEN}已重命名为 $name${NC}"
+}
 
-echo -e "${GREEN}欢迎使用 depo 编辑器${NC}"
-echo -e "按任意键开始编辑..."
-read -n1
+insert_file() {
+    local path=$(echo "$1" | awk '{print $2}')
+    if [ -f "$path" ]; then
+        BUFFER="${BUFFER}$(cat "$path")"
+        echo -e "${GREEN}已插入 $path${NC}"
+    fi
+}
 
-main_loop
+exec_python() {
+    local py=$(echo "$1" | sed -E 's/.*\((.*)\).*/\1/')
+    if command -v python3 &>/dev/null; then
+        python3 "$py"
+    else
+        python "$py"
+    fi
+}
+
+# ===== 读取按键 =====
+read_key() {
+    read -rsn1 k1
+
+    # Alt 键
+    if [[ "$k1" == $'\x1b' ]]; then
+        read -rsn1 k2
+        case "$k2" in
+            0) return 10 ;;  # Alt+0
+            1) return 11 ;;  # Alt+1
+            2) return 12 ;;  # Alt+2
+            3) return 13 ;;  # Alt+3
+            4) return 14 ;;  # Alt+4
+            5) return 15 ;;  # Alt+5
+            6) return 16 ;;  # Alt+6
+        esac
+    fi
+
+    # Ctrl 组合（方向键）
+    if [[ "$k1" == $'\x1b' ]]; then
+        read -rsn2 k2
+        if [[ "$k2" == "[D" ]]; then
+            return 20  # ←
+        elif [[ "$k2" == "[C" ]]; then
+            return 21  # →
+        fi
+    fi
+
+    echo "$k1"
+    return 0
+}
+
+# ===== 主循环 =====
+while true; do
+    clear_screen
+    show_status
+    display_buffer
+
+    read_key
+    ret=$?
+
+    case $ret in
+        10) command_terminal ;;
+        11) save_file; exit 0 ;;
+        12) echo "丢弃并退出"; exit 0 ;;
+        13) save_file ;;
+        14) BUFFER=""; MARKS=(); echo "已丢弃" ;;
+        15) echo "退出命令终端" ;;
+        16) MARKS=(); echo "标记已清除" ;;
+
+        20)  # ←
+            if [ $CURSOR -gt 0 ]; then
+                ((CURSOR--))
+            fi
+            if [ $MARK_MODE -eq 1 ]; then
+                MARKS+=("$CURSOR")
+            fi
+            ;;
+        21)  # →
+            if [ $CURSOR -lt ${#BUFFER} ]; then
+                ((CURSOR++))
+            fi
+            if [ $MARK_MODE -eq 1 ]; then
+                MARKS+=("$CURSOR")
+            fi
+            ;;
+    esac
+
+    # 普通字符输入
+    if [ $ret -eq 0 ]; then
+        read -rsn1 ch
+        if [[ "$ch" == $'\x7f' || "$ch" == $'\x08' ]]; then
+            # Backspace
+            if [ $CURSOR -gt 0 ]; then
+                BUFFER="${BUFFER:0:$((CURSOR-1))}${BUFFER:$CURSOR}"
+                ((CURSOR--))
+            fi
+        else
+            BUFFER="${BUFFER:0:$CURSOR}$ch${BUFFER:$CURSOR}"
+            ((CURSOR++))
+        fi
+    fi
+
+    # Ctrl 键切换标记模式
+    if [[ "$ch" == $'\x00' ]]; then
+        if [ $MARK_MODE -eq 0 ]; then
+            MARK_MODE=1
+            echo -e "${YELLOW}标记模式开启${NC}"
+        else
+            MARK_MODE=0
+            echo -e "${YELLOW}标记模式关闭${NC}"
+        fi
+        sleep 0.3
+    fi
+done
+
