@@ -3,6 +3,8 @@
 
 `git clone https://github.com/6w9bilibili/depo.git`
 
+`pkg install bash`
+
 接着找到depo文件夹
 
 `cd depo`
