@@ -24,7 +24,7 @@ sudo chmod +x /usr/local/bin/depo`
 
 Android路径
 
-`~/bin/depo'
+`~/bin/depo`
 
 `chmod +x ~/bin/depo`
 
