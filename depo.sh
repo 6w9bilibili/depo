@@ -1,21 +1,16 @@
 #!/bin/bash
 
 # ============================================
-# depo - sh 终端编辑器 v1.2
+# depo - sh 终端编辑器 v1.3
 # ============================================
 
 BUFFER=""
 CURSOR=0
 FILE_PATH=""
 
-# ===== 标记系统 =====
-MARK_MODE=0
-MARKS=()
-
 # ===== 颜色 =====
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -24,24 +19,24 @@ clear_screen() {
     clear
 }
 
-# ===== 显示状态栏 =====
+# ===== 状态栏 =====
 show_status() {
     echo -e "${BLUE}=== depo 编辑器 ===${NC}"
     echo -e "文件: ${GREEN}${FILE_PATH:-[未命名]}${NC}"
     echo -e "Alt+0:命令终端 | Alt+1:保存退出 | Alt+2:丢弃退出"
-    echo -e "Alt+3:保存 | Alt+4:丢弃 | Alt+5:退出命令终端"
-    echo -e "Alt+6:取消标记 | Ctrl+←/→:添加标记 | Ctrl:结束标记"
+    echo -e "Alt+3:保存 | Alt+4:丢弃"
     echo -e "${BLUE}===================${NC}"
     echo ""
 }
 
-# ===== 显示缓冲区（带光标 & 标记）=====
+# ===== 显示内容（普通输入）=====
 display_buffer() {
-    clear
+    clear_screen
+    show_status
     echo -n "$BUFFER"
 }
 
-# ===== 保存文件 =====
+# ===== 保存 =====
 save_file() {
     if [ -z "$FILE_PATH" ]; then
         read -p "请输入文件名: " FILE_PATH
@@ -105,7 +100,7 @@ exec_python() {
     fi
 }
 
-# ===== 读取按键 =====
+# ===== 按键读取（Alt + 方向键）=====
 read_key() {
     read -rsn1 k1
 
@@ -120,16 +115,12 @@ read_key() {
             2) return 12 ;;  # Alt+2
             3) return 13 ;;  # Alt+3
             4) return 14 ;;  # Alt+4
-            5) return 15 ;;  # Alt+5
-            6) return 16 ;;  # Alt+6
         esac
 
         # 方向键 ESC [ A/B/C/D
         if [[ "$k2" == "[" ]]; then
             read -rsn1 k3
             case "$k3" in
-                A) return 30 ;;  # ↑
-                B) return 31 ;;  # ↓
                 C) return 21 ;;  # →
                 D) return 20 ;;  # ←
             esac
@@ -141,33 +132,29 @@ read_key() {
     return 0
 }
 
-
 # ===== 主循环 =====
-read_key
-ret=$?
+while true; do
+    display_buffer
 
-case $ret in
-    10) command_terminal ;;
-    11) save_file; exit 0 ;;
-    12) exit 0 ;;
-    13) save_file ;;
-    14) BUFFER=""; MARKS=() ;;
-    15) echo "退出命令终端" ;;
-    16) MARKS=() ;;
+    read_key
+    ret=$?
 
-    20)  # ←
-        if [ $CURSOR -gt 0 ]; then ((CURSOR--)); fi
-        ;;
-    21)  # →
-        if [ $CURSOR -lt ${#BUFFER} ]; then ((CURSOR++)); fi
-        ;;
-    30)  # ↑
-        ;;
-    31)  # ↓
-        ;;
-esac
+    case $ret in
+        10) command_terminal ;;
+        11) save_file; exit 0 ;;
+        12) echo "丢弃并退出"; exit 0 ;;
+        13) save_file ;;
+        14) BUFFER=""; echo "已丢弃" ;;
 
-    # 普通字符输入
+        20)  # ←
+            if [ $CURSOR -gt 0 ]; then ((CURSOR--)); fi
+            ;;
+        21)  # →
+            if [ $CURSOR -lt ${#BUFFER} ]; then ((CURSOR++)); fi
+            ;;
+    esac
+
+    # 普通输入
     if [ $ret -eq 0 ]; then
         read -rsn1 ch
         if [[ "$ch" == $'\x7f' || "$ch" == $'\x08' ]]; then
@@ -181,17 +168,4 @@ esac
             ((CURSOR++))
         fi
     fi
-
-    # Ctrl 键切换标记模式
-    if [[ "$ch" == $'\x00' ]]; then
-        if [ $MARK_MODE -eq 0 ]; then
-            MARK_MODE=1
-            echo -e "${YELLOW}标记模式开启${NC}"
-        else
-            MARK_MODE=0
-            echo -e "${YELLOW}标记模式关闭${NC}"
-        fi
-        sleep 0.3
-    fi
 done
-
