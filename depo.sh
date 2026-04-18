@@ -37,12 +37,9 @@ show_status() {
 
 # ===== 显示缓冲区（带光标 & 标记）=====
 display_buffer() {
+    clear
     echo -n "$BUFFER"
-
-    local pos=$((CURSOR + 1))
-    tput cup $(tput lines) $pos
 }
-
 
 # ===== 保存文件 =====
 save_file() {
