@@ -37,35 +37,12 @@ show_status() {
 
 # ===== 显示缓冲区（带光标 & 标记）=====
 display_buffer() {
-    local i=0
-    local line=""
+    echo -n "$BUFFER"
 
-    while [ $i -lt ${#BUFFER} ]; do
-        local ch="${BUFFER:$i:1}"
-
-        # 是否标记位置
-        local marked=0
-        for m in "${MARKS[@]}"; do
-            if [ "$m" -eq "$i" ]; then
-                marked=1
-                break
-            fi
-        done
-
-        if [ $marked -eq 1 ]; then
-            ch="~$ch"
-        fi
-
-        if [ $i -eq $CURSOR ]; then
-            echo -n "${RED}[${ch}]${NC}"
-        else
-            echo -n "$ch"
-        fi
-
-        ((i++))
-    done
-    echo ""
+    local pos=$((CURSOR + 1))
+    tput cup $(tput lines) $pos
 }
+
 
 # ===== 保存文件 =====
 save_file() {
