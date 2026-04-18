@@ -1,25 +1,21 @@
 #!/bin/bash
-
 # ============================================
-# depo - sh 终端编辑器 v1.3
+# depo - sh 终端编辑器 v1.4
 # ============================================
 
 BUFFER=""
 CURSOR=0
 FILE_PATH=""
 
-# ===== 颜色 =====
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# ===== 清屏 =====
 clear_screen() {
     clear
 }
 
-# ===== 状态栏 =====
 show_status() {
     echo -e "${BLUE}=== depo 编辑器 ===${NC}"
     echo -e "文件: ${GREEN}${FILE_PATH:-[未命名]}${NC}"
@@ -29,14 +25,12 @@ show_status() {
     echo ""
 }
 
-# ===== 显示内容（普通输入）=====
 display_buffer() {
     clear_screen
     show_status
     echo -n "$BUFFER"
 }
 
-# ===== 保存 =====
 save_file() {
     if [ -z "$FILE_PATH" ]; then
         read -p "请输入文件名: " FILE_PATH
@@ -46,78 +40,23 @@ save_file() {
     sleep 0.5
 }
 
-# ===== 命令终端 =====
-command_terminal() {
-    clear_screen
-    echo -e "${BLUE}=== depo 命令终端 ===${NC}"
-    echo "poit (100)        - 转为16进制"
-    echo "test (file.txt)   - 重命名"
-    echo "les /path/file    - 插入文件"
-    echo "python (a.py)     - 执行Python"
-    echo "exit              - 返回"
-    echo -e "${BLUE}=====================${NC}"
-
-    while true; do
-        echo -n "depo> "
-        read -r cmd
-        case "$cmd" in
-            exit) break ;;
-            poit*) hex_convert ;;
-            test*) rename_file "$cmd" ;;
-            les*) insert_file "$cmd" ;;
-            python*) exec_python "$cmd" ;;
-        esac
-    done
-}
-
-hex_convert() {
-    if [ -n "$FILE_PATH" ]; then
-        BUFFER=$(xxd "$FILE_PATH" | cut -d' ' -f2-)
-        echo -e "${GREEN}已转换为16进制${NC}"
-    fi
-}
-
-rename_file() {
-    local name=$(echo "$1" | sed -E 's/.*\((.*)\).*/\1/')
-    FILE_PATH="$name"
-    echo -e "${GREEN}已重命名为 $name${NC}"
-}
-
-insert_file() {
-    local path=$(echo "$1" | awk '{print $2}')
-    if [ -f "$path" ]; then
-        BUFFER="${BUFFER}$(cat "$path")"
-        echo -e "${GREEN}已插入 $path${NC}"
-    fi
-}
-
-exec_python() {
-    local py=$(echo "$1" | sed -E 's/.*\((.*)\).*/\1/')
-    if command -v python3 &>/dev/null; then
-        python3 "$py"
-    else
-        python "$py"
-    fi
-}
-
-# ===== 按键读取（Alt + 方向键）=====
+# ===== read_key（统一处理 Alt / 方向键）=====
 read_key() {
     read -rsn1 k1
 
-    # ESC 序列（Alt / 方向键）
     if [[ "$k1" == $'\x1b' ]]; then
         read -rsn1 k2
 
         # Alt + 数字
         case "$k2" in
-            0) return 10 ;;  # Alt+0
-            1) return 11 ;;  # Alt+1
-            2) return 12 ;;  # Alt+2
-            3) return 13 ;;  # Alt+3
-            4) return 14 ;;  # Alt+4
+            0) return 10 ;;
+            1) return 11 ;;
+            2) return 12 ;;
+            3) return 13 ;;
+            4) return 14 ;;
         esac
 
-        # 方向键 ESC [ A/B/C/D
+        # 方向键
         if [[ "$k2" == "[" ]]; then
             read -rsn1 k3
             case "$k3" in
@@ -127,9 +66,87 @@ read_key() {
         fi
     fi
 
-    # 普通字符
     echo "$k1"
     return 0
+}
+
+# ===== 命令终端（用 read_key）=====
+command_terminal() {
+    clear_screen
+    echo -e "${BLUE}=== depo 命令终端 ===${NC}"
+    echo "poit (100)"
+    echo "test (file.txt)"
+    echo "les /path/file"
+    echo "python (a.py)"
+    echo "exit"
+    echo -e "${BLUE}=====================${NC}"
+
+    CMD_BUFFER=""
+
+    while true; do
+        echo -n "depo> $CMD_BUFFER"
+
+        read_key
+        ret=$?
+
+        case $ret in
+            20)  # ←
+                if [ ${#CMD_BUFFER} -gt 0 ]; then
+                    CMD_BUFFER="${CMD_BUFFER%?}"
+                fi
+                ;;
+            21)  # →
+                ;;
+            10|11|12|13|14)  # Alt 键（防止误触）
+                ;;
+        esac
+
+        if [ $ret -eq 0 ]; then
+            read -rsn1 ch
+            if [[ "$ch" == $'\x7f' || "$ch" == $'\x08' ]]; then
+                if [ ${#CMD_BUFFER} -gt 0 ]; then
+                    CMD_BUFFER="${CMD_BUFFER%?}"
+                fi
+            else
+                CMD_BUFFER="${CMD_BUFFER}$ch"
+            fi
+        fi
+
+        # 回车执行
+        if [[ "$ch" == "" ]]; then
+            case "$CMD_BUFFER" in
+                exit)
+                    return
+                    ;;
+                poit*)
+                    if [ -n "$FILE_PATH" ]; then
+                        BUFFER=$(xxd "$FILE_PATH" | cut -d' ' -f2-)
+                        echo -e "${GREEN}已转为16进制${NC}"
+                    fi
+                    ;;
+                test*)
+                    FILE_PATH=$(echo "$CMD_BUFFER" | sed -E 's/.*\((.*)\).*/\1/')
+                    echo -e "${GREEN}文件名设为 $FILE_PATH${NC}"
+                    ;;
+                les*)
+                    local path=$(echo "$CMD_BUFFER" | awk '{print $2}')
+                    if [ -f "$path" ]; then
+                        BUFFER="${BUFFER}$(cat "$path")"
+                        echo -e "${GREEN}已插入 $path${NC}"
+                    fi
+                    ;;
+                python*)
+                    local py=$(echo "$CMD_BUFFER" | sed -E 's/.*\((.*)\).*/\1/')
+                    if command -v python3 &>/dev/null; then
+                        python3 "$py"
+                    else
+                        python "$py"
+                    fi
+                    ;;
+            esac
+            CMD_BUFFER=""
+        fi
+    done
 }
 
 # ===== 主循环 =====
@@ -154,11 +171,9 @@ while true; do
             ;;
     esac
 
-    # 普通输入
     if [ $ret -eq 0 ]; then
         read -rsn1 ch
         if [[ "$ch" == $'\x7f' || "$ch" == $'\x08' ]]; then
-            # Backspace
             if [ $CURSOR -gt 0 ]; then
                 BUFFER="${BUFFER:0:$((CURSOR-1))}${BUFFER:$CURSOR}"
                 ((CURSOR--))
@@ -169,3 +184,4 @@ while true; do
         fi
     fi
 done
+
