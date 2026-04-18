@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# depo  v1.5
+# depo  v1.6
 # ============================================
 
 BUFFER=""
@@ -117,5 +117,9 @@ while true; do
             ((CURSOR++))
         fi
     fi
-done
 
+# 自动兼容 Termux
+if [[ -d "$HOME/bin" ]]; then
+    mkdir -p "$HOME/bin"
+fi
+done
