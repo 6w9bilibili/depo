@@ -20,7 +20,7 @@
 Linux路径-
 
 `sudo cp depo.sh /usr/local/bin/depo
-sudo chmod +x /usr/local/bin/depo
+sudo chmod +x /usr/local/bin/depo`
 
 Android路径
 
