@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ============================================
-# depo - sh 终端编辑器 v1.1
+# depo - sh 终端编辑器 v1.2
 # ============================================
 
 BUFFER=""
@@ -109,9 +109,11 @@ exec_python() {
 read_key() {
     read -rsn1 k1
 
-    # Alt 键
+    # ESC 序列（Alt / 方向键）
     if [[ "$k1" == $'\x1b' ]]; then
         read -rsn1 k2
+
+        # Alt + 数字
         case "$k2" in
             0) return 10 ;;  # Alt+0
             1) return 11 ;;  # Alt+1
@@ -121,57 +123,49 @@ read_key() {
             5) return 15 ;;  # Alt+5
             6) return 16 ;;  # Alt+6
         esac
-    fi
 
-    # Ctrl 组合（方向键）
-    if [[ "$k1" == $'\x1b' ]]; then
-        read -rsn2 k2
-        if [[ "$k2" == "[D" ]]; then
-            return 20  # ←
-        elif [[ "$k2" == "[C" ]]; then
-            return 21  # →
+        # 方向键 ESC [ A/B/C/D
+        if [[ "$k2" == "[" ]]; then
+            read -rsn1 k3
+            case "$k3" in
+                A) return 30 ;;  # ↑
+                B) return 31 ;;  # ↓
+                C) return 21 ;;  # →
+                D) return 20 ;;  # ←
+            esac
         fi
     fi
 
+    # 普通字符
     echo "$k1"
     return 0
 }
 
+
 # ===== 主循环 =====
-while true; do
-    clear_screen
-    show_status
-    display_buffer
+read_key
+ret=$?
 
-    read_key
-    ret=$?
+case $ret in
+    10) command_terminal ;;
+    11) save_file; exit 0 ;;
+    12) exit 0 ;;
+    13) save_file ;;
+    14) BUFFER=""; MARKS=() ;;
+    15) echo "退出命令终端" ;;
+    16) MARKS=() ;;
 
-    case $ret in
-        10) command_terminal ;;
-        11) save_file; exit 0 ;;
-        12) echo "丢弃并退出"; exit 0 ;;
-        13) save_file ;;
-        14) BUFFER=""; MARKS=(); echo "已丢弃" ;;
-        15) echo "退出命令终端" ;;
-        16) MARKS=(); echo "标记已清除" ;;
-
-        20)  # ←
-            if [ $CURSOR -gt 0 ]; then
-                ((CURSOR--))
-            fi
-            if [ $MARK_MODE -eq 1 ]; then
-                MARKS+=("$CURSOR")
-            fi
-            ;;
-        21)  # →
-            if [ $CURSOR -lt ${#BUFFER} ]; then
-                ((CURSOR++))
-            fi
-            if [ $MARK_MODE -eq 1 ]; then
-                MARKS+=("$CURSOR")
-            fi
-            ;;
-    esac
+    20)  # ←
+        if [ $CURSOR -gt 0 ]; then ((CURSOR--)); fi
+        ;;
+    21)  # →
+        if [ $CURSOR -lt ${#BUFFER} ]; then ((CURSOR++)); fi
+        ;;
+    30)  # ↑
+        ;;
+    31)  # ↓
+        ;;
+esac
 
     # 普通字符输入
     if [ $ret -eq 0 ]; then
